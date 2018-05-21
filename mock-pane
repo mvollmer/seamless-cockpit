@@ -1,0 +1,150 @@
+#! /usr/bin/python
+
+import sys
+import BaseHTTPServer
+import urlparse
+
+USER = "root"
+PASS = "hunter2"
+
+LOGIN = """
+<html>
+  <body>
+    <form action="/login" method="post">
+      <label>User: <input name="user" type="text"></label>
+      <label>Password: <input name="pass" type="password"></label>
+      <button>Log in</button>
+    </form>
+  </body>
+</html>
+"""
+
+DASHBOARD = """
+<html>
+  <body>
+    Logged in as {user}.
+    <form action="/logout" method="post">
+      <button>Log out</button>
+    </form>
+    <form action="/open" method="post">
+      <label>Host: <input name="host" type="text" value="localhost"></label>
+      <button>Open</button>
+    </form>
+  </body>
+</html>
+"""
+
+COCKPIT = """
+<html>
+  <body>
+    Web Console of {host}.
+    <form action="/close" method="post">
+      <button>Close</button>
+    </form>
+    <iframe style="width:800px; height:600px" src="https://{pane_host}:9090/={host}">
+    </iframe>
+  </body>
+</html>
+"""
+
+sessions = { }
+
+class Session:
+    def __init__(self):
+        self.token = "123456"
+        self.host = None
+
+class handler(BaseHTTPServer.BaseHTTPRequestHandler):
+    def find_session(self):
+        for c in map(lambda c: c.strip().split("="), self.headers["Cookie"].split(";")):
+            if c[0] == "token" and c[1] in sessions:
+                return sessions[c[1]]
+        return None
+
+    # Pages
+
+    def login_page(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(LOGIN)
+
+    def dashboard_page(self, session):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(DASHBOARD.format(user=USER))
+
+    def cockpit_page(self, session):
+        pane_host=self.headers["Host"].split(":")[0]
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(COCKPIT.format(pane_host=pane_host, host=session.host, token=session.token))
+
+    # Form actions
+
+    def do_login(self, params):
+        if params.get("user")[0] == USER and params.get("pass")[0] == PASS:
+            s = Session()
+            sessions[s.token] = s
+            self.redirect("token=%s" % s.token)
+        else:
+            self.send_error(401)
+
+    def do_logout(self, session):
+        if session and session.token in sessions:
+            del sessions[session.token]
+        self.redirect("token=none")
+
+    def do_open(self, session, params):
+        session.host = params.get("host")[0]
+        self.redirect()
+
+    def do_close(self, session):
+        session.host = None
+        self.redirect()
+
+    def redirect(self, cookie = None):
+        self.send_response(301)
+        self.send_header("Location", "/")
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+
+    # API
+
+    # Routing
+
+    def do_GET(self):
+        session = self.find_session()
+        if self.path == "/":
+            if not session:
+                self.login_page()
+            elif not session.host:
+                self.dashboard_page(session)
+            else:
+                self.cockpit_page(session)
+        else:
+            self.send_error(404)
+
+    def do_POST(self):
+        session = self.find_session()
+        len = int(self.headers.getheader('content-length', 0))
+        params = urlparse.parse_qs(self.rfile.read(len), True)
+        if self.path == "/login":
+            self.do_login(params)
+        elif self.path == "/logout":
+            self.do_logout(session)
+        elif self.path == "/open":
+            self.do_open(session, params)
+        elif self.path == "/close":
+            self.do_close(session)
+        else:
+            self.send_error(404)
+
+# Main
+
+port = 8080
+if len(sys.argv) > 1:
+    port = int(sys.argv[2])
+
+print("Listening on port {port}".format(port=port))
+BaseHTTPServer.HTTPServer(('', port), handler).serve_forever()
