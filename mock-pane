@@ -140,8 +140,10 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
     def api_refresh_token(self, session, query):
         if query["redirect_uri"]:
             rd = urlparse.urlparse(query["redirect_uri"][0])
-            rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
-            print(urlparse.urlunparse(rd))
+            if session:
+                rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
+            else:
+                rd = (rd[0], rd[1], rd[2], rd[3], "error_description=No mock pane session", rd[5])
             self.send_response(301)
             self.send_header("Location", urlparse.urlunparse(rd))
             self.send_header("Cache-Control", "no-store")
@@ -161,12 +163,12 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
             else:
                 self.cockpit_page(session)
         elif url.path.startswith("/api/"):
-            if not session:
+            if url.path == "/api/refresh-token":
+                self.api_refresh_token(session, urlparse.parse_qs(url.query))
+            elif not session:
                 self.send_error(401)
             elif url.path == "/api/host":
                 self.api_host(session)
-            elif url.path == "/api/refresh-token":
-                self.api_refresh_token(session, urlparse.parse_qs(url.query))
             else:
                 self.send_error(404)
         else:
