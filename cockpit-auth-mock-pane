@@ -1,0 +1,120 @@
+#! /usr/bin/python
+
+import sys
+import os
+import json
+import urllib2
+import base64
+
+def dbg(str):
+    sys.stderr.write(str + "\n")
+
+def usage():
+    sys.stderr.write("usage {} [user@]host[:port]\n".format(sys.argv[0]))
+    sys.exit(os.EX_USAGE)
+
+# Cockpit protocol, encoding and decoding of control messages.
+
+def send_control(msg):
+    text = json.dumps(msg)
+    dbg("-> %s" % text)
+    os.write(1, "{}\n\n{}".format(len(text)+1, text))
+
+def read_size(fd):
+    sep = '\n'
+    size = 0
+    seen = 0
+
+    while True:
+        t = os.read(fd, 1)
+
+        if not t:
+            return 0
+
+        if t == '\n':
+            break
+
+        size = (size * 10) + int(t)
+        seen = seen + 1
+
+        if seen > 7:
+            raise ValueError("Invalid frame: size too long")
+
+    return size
+
+def read_control():
+    size = read_size(1)
+
+    data = ""
+    while size > 0:
+        d = os.read(1, size)
+        size = size - len(d)
+        data = data + d
+
+    dbg("<- %s" % data.strip())
+    return json.loads(data)
+
+# Specific control messages
+
+def send_auth_challenge(challenge):
+    send_control({
+        "command": "authorize",
+        "cookie": os.urandom(8).encode("hex"), # must be present and unique(?)
+        "challenge": challenge
+    })
+
+def send_auth_response(response):
+    send_control({
+        "command": "authorize",
+        "response": response
+    })
+
+def read_auth_reply():
+    cmd = read_control()
+    response = cmd.get("response")
+    if cmd.get("command") != "authorize" or not response:
+        raise ValueError("Did not receive a valid authorize command")
+    return response
+
+def send_problem_init(problem, message, auth_methods):
+    send_control({
+        "command": "init",
+        "problem": problem,
+        "message": message,
+        "auth-method-results": auth_methods
+    })
+
+# Talking to the mock pane API
+
+def get_token_from_auth_data(auth_data):
+    f = auth_data.split(" ")
+    return f[1]
+
+def api_call(path, token):
+    dbg("=> %s" % path)
+    req = urllib2.Request("http://localhost:8080/api/" + path, None,
+                          { "Authorization": "token %s" % token })
+    resp = urllib2.urlopen(req).read()
+    dbg("<= %s" % resp)
+    return json.loads(resp)
+
+# Main
+
+def main(args):
+    if len(args) != 2:
+        usage()
+
+    send_auth_challenge("*")
+    token = get_token_from_auth_data(read_auth_reply())
+    data = api_call("host", token) # XXX - check for errors
+    dbg("data %s" % data)
+    if data["method"] == "password":
+        send_auth_response("Basic " + base64.b64encode("root:%s" % data["password"]))
+    else:
+        send_problem_init("internal-error", "Unsupported auth method %s" % data["method"], None)
+
+    os.environ["COCKPIT_SSH_ALLOW_UNKNOWN"] = "1"
+    os.execlpe("/usr/libexec/cockpit-ssh", "/usr/libexec/cockpit-ssh", args[1], os.environ)
+
+if __name__ == '__main__':
+    main(sys.argv)

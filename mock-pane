@@ -1,8 +1,10 @@
 #! /usr/bin/python
 
+import os
 import sys
 import BaseHTTPServer
 import urlparse
+import json
 
 USER = "root"
 PASS = "hunter2"
@@ -22,12 +24,18 @@ LOGIN = """
 DASHBOARD = """
 <html>
   <body>
-    Logged in as {user}.
     <form action="/logout" method="post">
       <button>Log out</button>
     </form>
     <form action="/open" method="post">
       <label>Host: <input name="host" type="text" value="localhost"></label>
+      <br>
+      <label><input name="method" type="radio" value="password" checked>Root password:
+         <input name="pass" type="password"></label>
+      <br>
+      <label><input name="method" type="radio" value="key">SSH key: <input name="key" type="text" value="id_rsa"></label>
+      <label>Passphrase: <input name="phrase" type="password"></label>
+      <br>
       <button>Open</button>
     </form>
   </body>
@@ -37,11 +45,10 @@ DASHBOARD = """
 COCKPIT = """
 <html>
   <body>
-    Web Console of {host}.
     <form action="/close" method="post">
       <button>Close</button>
     </form>
-    <iframe style="width:800px; height:600px" src="https://{pane_host}:9090/={host}">
+    <iframe style="width:800px; height:600px" src="https://{pane_host}:9999/={target_host}?access_token={token}">
     </iframe>
   </body>
 </html>
@@ -51,14 +58,22 @@ sessions = { }
 
 class Session:
     def __init__(self):
-        self.token = "123456"
+        self.token = os.urandom(16).encode("hex")
         self.host = None
+        self.method = None
+        self.password = None
+        self.key = None
+        self.passphrase = None
+        print("New session %s" % self.token)
 
 class handler(BaseHTTPServer.BaseHTTPRequestHandler):
     def find_session(self):
-        for c in map(lambda c: c.strip().split("="), self.headers["Cookie"].split(";")):
+        for c in map(lambda c: c.strip().split("="), self.headers.get("Cookie", "").split(";")):
             if c[0] == "token" and c[1] in sessions:
                 return sessions[c[1]]
+        c = self.headers.get("Authorization", "").split(" ")
+        if c[0] == "token" and c[1] in sessions:
+            return sessions[c[1]]
         return None
 
     # Pages
@@ -77,9 +92,10 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         pane_host=self.headers["Host"].split(":")[0]
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(COCKPIT.format(pane_host=pane_host, host=session.host, token=session.token))
+        self.wfile.write(COCKPIT.format(pane_host=pane_host, target_host=session.host,
+                                        token=session.token))
 
-    # Form actions
+    # UI actions
 
     def do_login(self, params):
         if params.get("user")[0] == USER and params.get("pass")[0] == PASS:
@@ -95,7 +111,12 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.redirect("token=none")
 
     def do_open(self, session, params):
+        print(params)
         session.host = params.get("host")[0]
+        session.data = { "method": params.get("method")[0],
+                         "password": params.get("pass")[0],
+                         "key": params.get("key")[0],
+                         "passphrase": params.get("phrase")[0] }
         self.redirect()
 
     def do_close(self, session):
@@ -111,17 +132,43 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     # API
 
+    def api_host(self, session):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(json.dumps(session.data))
+
+    def api_refresh_token(self, session, query):
+        if query["redirect_uri"]:
+            rd = urlparse.urlparse(query["redirect_uri"][0])
+            rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
+            print(urlparse.urlunparse(rd))
+            self.send_response(301)
+            self.send_header("Location", urlparse.urlunparse(rd))
+            self.send_header("Cache-Control", "no-store")
+        else:
+            self.send_error(404)
+
     # Routing
 
     def do_GET(self):
         session = self.find_session()
-        if self.path == "/":
+        url = urlparse.urlparse(self.path)
+        if url.path == "/":
             if not session:
                 self.login_page()
             elif not session.host:
                 self.dashboard_page(session)
             else:
                 self.cockpit_page(session)
+        elif url.path.startswith("/api/"):
+            if not session:
+                self.send_error(401)
+            elif url.path == "/api/host":
+                self.api_host(session)
+            elif url.path == "/api/refresh-token":
+                self.api_refresh_token(session, urlparse.parse_qs(url.query))
+            else:
+                self.send_error(404)
         else:
             self.send_error(404)
 
@@ -131,6 +178,8 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         params = urlparse.parse_qs(self.rfile.read(len), True)
         if self.path == "/login":
             self.do_login(params)
+        elif not session:
+            self.redirect()
         elif self.path == "/logout":
             self.do_logout(session)
         elif self.path == "/open":
