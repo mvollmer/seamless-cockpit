@@ -23,21 +23,3 @@ Cockpit asks again for credentials for that specific machine.
 This repository contains a working sketch of how to set up the
 management system together with Cockpit to seamlessly transfer
 credentials to Cockpit.
-
-
-Mock:
-
- - login creds are root / hunter2
-
- - creates random number, sets as cookie, uses for auth
-
- - shows dashboard, can add hosts and give user / passwd / private
-   key, stored in memory.
-
- - iframe with Cockpit
-
- - access_token is random number
-
- - cockpit ssh program uses access_token to query mock 'rest' api.
-
- - mock api looks up based on access_token
