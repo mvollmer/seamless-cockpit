@@ -85,7 +85,7 @@ def exit_with_problem(problem, message, auth_methods):
     })
     sys.exit(1)
 
-# Talking to the mock pane API
+# Talking to the Max Pane API
 
 def get_token_from_auth_data(auth_data):
     f = auth_data.split(" ")
