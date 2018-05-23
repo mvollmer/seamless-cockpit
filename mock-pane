@@ -15,6 +15,7 @@ LOGIN = """
     <form action="/login" method="post">
       <label>User: <input name="user" type="text"></label>
       <label>Password: <input name="pass" type="password"></label>
+      <input name="redirect_uri" type="text" value="{redirect_uri}" style="display: none">
       <button>Log in</button>
     </form>
   </body>
@@ -27,7 +28,7 @@ DASHBOARD = """
     <form action="/logout" method="post">
       <button>Log out</button>
     </form>
-    <form action="/open" method="post">
+    <form action="/add" method="post">
       <label>Host: <input name="host" type="text" value="localhost"></label>
       <br>
       <label><input name="method" type="radio" value="password" checked>Root password:
@@ -36,34 +37,33 @@ DASHBOARD = """
       <label><input name="method" type="radio" value="key">SSH key: <input name="key" type="text" value="id_rsa"></label>
       <label>Passphrase: <input name="phrase" type="password"></label>
       <br>
-      <button>Open</button>
+      <button>Add</button>
     </form>
+    <table>
+      <tr><th>Host</th><th>Method</th></tr>
+      {host_rows}
+    </table>
   </body>
 </html>
 """
 
-COCKPIT = """
-<html>
-  <body>
-    <form action="/close" method="post">
-      <button>Close</button>
-    </form>
-    <iframe style="width:800px; height:600px" src="https://{pane_host}:9999/={target_host}?access_token={token}">
-    </iframe>
-  </body>
-</html>
+DASHBOARD_HOST_ROW = """
+<tr>
+  <td>{host}</td><td>{method}</td><td><a href="{link}">Cockpit</a></td>
+</tr>
 """
+
+COCKPIT_URL = """
+https://{pane_host}:9999/={target_host}?access_token={token}
+"""
+
+hosts = [ ]
 
 sessions = { }
 
 class Session:
     def __init__(self):
         self.token = os.urandom(16).encode("hex")
-        self.host = None
-        self.method = None
-        self.password = None
-        self.key = None
-        self.passphrase = None
         print("New session %s" % self.token)
 
 class handler(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -78,22 +78,23 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     # Pages
 
-    def login_page(self):
+    def login_page(self, redirect_uri = ""):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(LOGIN)
+        self.wfile.write(LOGIN.format(redirect_uri=redirect_uri))
 
     def dashboard_page(self, session):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(DASHBOARD.format(user=USER))
-
-    def cockpit_page(self, session):
         pane_host=self.headers["Host"].split(":")[0]
+        def cockpit_url(h):
+            return COCKPIT_URL.format(pane_host=pane_host,
+                                      token=session.token,
+                                      target_host=h["id"])
+        print(hosts)
+        host_rows = "\n".join([ DASHBOARD_HOST_ROW.format(link=cockpit_url(h), **h)
+                                for h in hosts ])
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(COCKPIT.format(pane_host=pane_host, target_host=session.host,
-                                        token=session.token))
+        self.wfile.write(DASHBOARD.format(host_rows=host_rows))
 
     # UI actions
 
@@ -101,7 +102,16 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         if params.get("user")[0] == USER and params.get("pass")[0] == PASS:
             s = Session()
             sessions[s.token] = s
-            self.redirect("token=%s" % s.token)
+            redirect_uri = params.get("redirect_uri", [""])[0]
+            print(params, redirect_uri)
+            if redirect_uri != "":
+                rd = urlparse.urlparse(redirect_uri)
+                rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % s.token, rd[5])
+                self.send_response(301)
+                self.send_header("Location", urlparse.urlunparse(rd))
+                self.send_header("Cache-Control", "no-store")
+            else:
+                self.redirect("token=%s" % s.token)
         else:
             self.send_error(401)
 
@@ -110,17 +120,14 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
             del sessions[session.token]
         self.redirect("token=none")
 
-    def do_open(self, session, params):
-        print(params)
-        session.host = params.get("host")[0]
-        session.data = { "method": params.get("method")[0],
-                         "password": params.get("pass")[0],
-                         "key": params.get("key")[0],
-                         "passphrase": params.get("phrase")[0] }
-        self.redirect()
-
-    def do_close(self, session):
-        session.host = None
+    def do_add(self, params):
+        global hosts
+        hosts += [ { "id": len(hosts),
+                     "host": params.get("host")[0],
+                     "method": params.get("method")[0],
+                     "password": params.get("pass")[0],
+                     "key": params.get("key")[0],
+                     "passphrase": params.get("phrase")[0] } ]
         self.redirect()
 
     def redirect(self, cookie = None):
@@ -132,43 +139,49 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
 
     # API
 
-    def api_host(self, session):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(json.dumps(session.data))
+    def api_host(self, session, query):
+        try:
+            id = int(query["id"][0])
+        except:
+            id = -1
+        if id >= 0 and id < len(hosts):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(json.dumps(hosts[id]))
+        else:
+            self.send_error(404)
 
     def api_refresh_token(self, session, query):
         if query["redirect_uri"]:
             rd = urlparse.urlparse(query["redirect_uri"][0])
             if session:
                 rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
+                self.send_response(301)
+                self.send_header("Location", urlparse.urlunparse(rd))
+                self.send_header("Cache-Control", "no-store")
             else:
-                rd = (rd[0], rd[1], rd[2], rd[3], "error_description=No mock pane session", rd[5])
-            self.send_response(301)
-            self.send_header("Location", urlparse.urlunparse(rd))
-            self.send_header("Cache-Control", "no-store")
+                self.login_page(urlparse.urlunparse(rd))
         else:
-            self.send_error(404)
+            self.send_error(400)
 
     # Routing
 
     def do_GET(self):
         session = self.find_session()
         url = urlparse.urlparse(self.path)
+        params = urlparse.parse_qs(url.query)
         if url.path == "/":
             if not session:
                 self.login_page()
-            elif not session.host:
-                self.dashboard_page(session)
             else:
-                self.cockpit_page(session)
+                self.dashboard_page(session)
         elif url.path.startswith("/api/"):
             if url.path == "/api/refresh-token":
-                self.api_refresh_token(session, urlparse.parse_qs(url.query))
+                self.api_refresh_token(session, params)
             elif not session:
                 self.send_error(401)
             elif url.path == "/api/host":
-                self.api_host(session)
+                self.api_host(session, params)
             else:
                 self.send_error(404)
         else:
@@ -184,10 +197,8 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
             self.redirect()
         elif self.path == "/logout":
             self.do_logout(session)
-        elif self.path == "/open":
-            self.do_open(session, params)
-        elif self.path == "/close":
-            self.do_close(session)
+        elif self.path == "/add":
+            self.do_add(params)
         else:
             self.send_error(404)
 
