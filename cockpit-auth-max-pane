@@ -5,6 +5,7 @@ import os
 import json
 import urllib2
 import base64
+import subprocess
 
 def dbg(str):
     sys.stderr.write(str + "\n")
@@ -104,7 +105,9 @@ def api_call(path, token):
                                   "Token was not valid",
                                   { "password": "not-tried", "token": "denied" })
             elif err.code == 404:
-                return None
+                exit_with_problem("access-denied",
+                                  "Host with id %s is not known to Max Pane" % args[1],
+                                  None)
         raise
     return json.loads(resp)
 
@@ -117,14 +120,8 @@ def main(args):
     send_auth_challenge("*")
     token = get_token_from_auth_data(read_auth_reply())
     data = api_call("host?id=" + args[1], token)
-    if not data:
-        exit_with_problem("access-denied",
-                          "Host with id %s is not known to Max Pane" % args[1],
-                          None)
-    if data["method"] == "password":
-        send_auth_response("Basic " + base64.b64encode("root:%s" % data["password"]))
-    else:
-        exit_with_problem("internal-error", "Unsupported auth method %s" % data["method"], None)
+
+    send_auth_response("Basic " + base64.b64encode("root:%s" % data["password"]))
 
     os.environ["COCKPIT_SSH_ALLOW_UNKNOWN"] = "1"
     os.execlpe("/usr/libexec/cockpit-ssh", "/usr/libexec/cockpit-ssh", data["host"], os.environ)

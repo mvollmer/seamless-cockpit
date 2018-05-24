@@ -30,17 +30,11 @@ DASHBOARD = """
     </form>
     <form action="/add" method="post">
       <label>Host: <input name="host" type="text" value="localhost"></label>
-      <br>
-      <label><input name="method" type="radio" value="password" checked>Root password:
-         <input name="pass" type="password"></label>
-      <br>
-      <label><input name="method" type="radio" value="key">SSH key: <input name="key" type="text" value="id_rsa"></label>
-      <label>Passphrase: <input name="phrase" type="password"></label>
-      <br>
+      <label>Root password: <input name="pass" type="password"></label>
       <button>Add</button>
     </form>
     <table>
-      <tr><th>Host</th><th>Method</th></tr>
+      <tr><th>Host</th></tr>
       {host_rows}
     </table>
   </body>
@@ -49,7 +43,7 @@ DASHBOARD = """
 
 DASHBOARD_HOST_ROW = """
 <tr>
-  <td>{host}</td><td>{method}</td><td><a href="{link}">Cockpit</a></td>
+  <td>{host}</td><td><a href="{link}">Web Console</a></td>
 </tr>
 """
 
@@ -124,10 +118,7 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         global hosts
         hosts += [ { "id": len(hosts),
                      "host": params.get("host")[0],
-                     "method": params.get("method")[0],
-                     "password": params.get("pass")[0],
-                     "key": params.get("key")[0],
-                     "passphrase": params.get("phrase")[0] } ]
+                     "password": params.get("pass")[0] } ]
         self.redirect()
 
     def redirect(self, cookie = None):
