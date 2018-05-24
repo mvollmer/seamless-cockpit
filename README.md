@@ -97,8 +97,8 @@ The `max-pane-cockpit` script configures Cockpit to use the
 In addition, Cockpit is configured to exclusively use OAuth for
 authentication, instead of the normal user and password prompts.
 
-When OAuth is used, Cockpit looks for a `?access_token=...` parameter
-in the initial GET request.  This token is passed to
+When OAuth is used, Cockpit initiates a "implicit grant" scheme with
+the max-pane server to get a access token.  This token is passed to
 `cockpit-auth-mock-pane`.
 
 The job of `cockpit-auth-mock-pane` is now to verify that the token is
@@ -120,7 +120,7 @@ simply the index into the array of hosts.
 #### Linking
 
 Thus, when all this is configured by `mock-pane-cockpit`, all
-`mock-pane` needs to do is to use the correct URL for linking to
+`mock-pane` needs to do is to use this simple URL for linking to
 Cockpit:
 
-    https://MASTER:9999/=INDEX?access_token=TOKEN
+    https://MASTER:9999/=INDEX

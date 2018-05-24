@@ -1,5 +1,39 @@
 #! /usr/bin/python
 
+# This program is intended to demonstrate the role of a management
+# system like ManageIQ or Foreman in the Single Sign On dance with
+# Cockpit.
+
+# While running, the process maintains a list of hosts in memory, and
+# stores the root password for each host.  It might store other
+# credentials that allow logging into that host, such as a SSH private
+# key.  The root password is retrieved by cockpit-auth-max-pane to
+# perform the actual log in for Cockpit.
+
+# In addition to serving the simplistic HTML pages that form the UI,
+# this program also responds to some restish API endpoints.  Such a
+# request should carry a "Authorization: token XXXX" header with a
+# valid token.  Valid tokens are given out by the UI via the links to
+# Cockpit and by the /refresh_token endpoint.
+#
+# - GET /api/host?id=ID
+#
+# Return the data for the host with the given id, as JSON.
+
+# This program also implements the OAuth implicit grant protocol on
+# the /get_token endpoint.
+#
+# - GET /token?redirect_uri=URI
+#
+# Respond with a redirect response (code 301) to
+# "URI?access_token=XXXX", where XXXX is a valid token for use with
+# the API.
+#
+# If the request has a valid session cookie, the redirection will
+# happen right away.  Otherwise, the normal Max Pane login page will
+# be shown and the redirection happens after the use has logged in
+# there.
+
 import os
 import sys
 import BaseHTTPServer
@@ -48,7 +82,7 @@ DASHBOARD_HOST_ROW = """
 """
 
 COCKPIT_URL = """
-https://{pane_host}:9999/={target_host}?access_token={token}
+https://{pane_host}:9999/={target_host}
 """
 
 hosts = [ ]
@@ -99,8 +133,9 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
             s = Session()
             sessions[s.token] = s
             redirect_uri = params.get("redirect_uri", [""])[0]
-            print(params, redirect_uri)
             if redirect_uri != "":
+                # We come here when a request to /token was made
+                # without a session, see oauth_token.
                 rd = urlparse.urlparse(redirect_uri)
                 rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % s.token, rd[5])
                 self.send_response(301)
@@ -144,7 +179,9 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         else:
             self.send_error(404)
 
-    def api_refresh_token(self, session, query):
+    # OAuth
+
+    def oauth_token(self, session, query):
         if query["redirect_uri"]:
             rd = urlparse.urlparse(query["redirect_uri"][0])
             if session:
@@ -153,6 +190,8 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.send_header("Location", urlparse.urlunparse(rd))
                 self.send_header("Cache-Control", "no-store")
             else:
+                # Let the user login again, and redirect as requested
+                # when he/she does.  See do_login.
                 self.login_page(urlparse.urlunparse(rd))
         else:
             self.send_error(400)
@@ -168,10 +207,10 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.login_page()
             else:
                 self.dashboard_page(session)
+        elif url.path == "/token":
+            self.oauth_token(session, params)
         elif url.path.startswith("/api/"):
-            if url.path == "/api/refresh-token":
-                self.api_refresh_token(session, params)
-            elif not session:
+            if not session:
                 self.send_error(401)
             elif url.path == "/api/host":
                 self.api_host(session, params)

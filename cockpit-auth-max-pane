@@ -1,5 +1,41 @@
 #! /usr/bin/python
 
+# This program acts as a external authentication helper for Cockpit.
+# It is spawned as part of establishing a new Cockpit session on a
+# remote machine.
+
+# This programs needs to talk the Cockpit wire protocol on stdin and
+# stdout, see send_control and read_control.
+
+# The normal sequence of events is:
+#
+# - cockpit-ws receives a request for /=HOST without a session cookie
+#
+# - cockpit-ws redirects to the max-pane /token endpoint with a
+#   redirect_uri that points back at Cockpit.
+#
+# - max-pane find its own session cookie in the request to /token and
+#   redirects back to Cockpit after adding "?access_token=TOKEN" to
+#   the URL
+#
+# - cockpit-ws sets its authorization data to "Bearer TOKEN"
+#
+# - cockpit-ws spawns "cockput-auth-max-pane HOST"
+#
+# - cockpit-auth-max-pane gets the token from cockpit-ws with a
+#   "authorize" control message
+#
+# - cockpit-auth-max-pane uses that token to get the host address and
+#   root password from the max-pane /api/host endpoint
+#
+# - cockpit-auth-max-pane resets the cockpit-ws authorization data to
+#   "Basic root:PASSWORD" "with a "authorize" control message.
+#
+# - cockpit-auth-max-pane execs "cockpit-ssh ADDRESS"
+#
+# - cockpit-ssh retrieves the user name and password with a
+#   "authorize" control message and logs into the remote host
+
 import sys
 import os
 import json

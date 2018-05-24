@@ -21,7 +21,7 @@ Action = remote-login-ssh
 command = ./cockpit-auth-max-pane
 
 [OAuth]
-Url = http://${master}:8080/api/refresh-token
+Url = http://${master}:8080/token
 EOF
 
 if [ ! -d ./cockpit/ws-certs.d ]; then
