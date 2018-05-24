@@ -70,6 +70,57 @@ Then start with these steps:
 
 Here is a recording of what should happen: https://youtu.be/FSSiL_oHWi0
 
-### Detailed description
+### Description
 
-coming up...
+Before diving into the code, it might help to have a look at the big
+picture.
+
+Implementing a seamless single sign on combines two features of
+Cockpit: external authentication helpers, and OAuth.
+
+#### External authentication
+
+Cockpit can be configured to use an external program to perform
+authentication.  Such a program usually gets handed the username and
+password from the login page and is responsible for establishing the
+Cockpit session.
+
+Cockpit itself comes with a few authentication programs, including
+`cockpit-session` for PAM and GSSAPI authentication, and `cockpit-ssh`
+for remote authentication via SSH.
+
+The `max-pane-cockpit` script configures Cockpit to use the
+`cockpit-auth-max-pane` program to perform all remote authentication.
+
+#### OAuth
+
+In addition, Cockpit is configured to exclusively use OAuth for
+authentication, instead of the normal user and password prompts.
+
+When OAuth is used, Cockpit looks for a `?access_token=...` parameter
+in the initial GET request.  This token is passed to
+`cockpit-auth-mock-pane`.
+
+The job of `cockpit-auth-mock-pane` is now to verify that the token is
+valid, and if it is, spawn Cockpit's own `cockpit-ssh` with the right
+parameters and credentials.
+
+It does this job by making a API call to the `mock-pane` server on
+localhost.  If `mock-pane` accepts the token, it will return the
+credentials for use with `cockpit-ssh`.
+
+#### Host parameter
+
+One additional detail is that the authentication program can define
+what the 'host' parameter actually means.  With `cockpit-ssh` it's the
+actual hostname or IP address that you would also use on the
+commandline with "ssh".  With our `cockpit-auth-max-pane` here it is
+simply the index into the array of hosts.
+
+#### Linking
+
+Thus, when all this is configured by `mock-pane-cockpit`, all
+`mock-pane` needs to do is to use the correct URL for linking to
+Cockpit:
+
+    https://MASTER:9999/=INDEX?access_token=TOKEN
