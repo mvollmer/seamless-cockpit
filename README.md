@@ -1,5 +1,4 @@
-Cockpit Single Sign On Demo
----------------------------
+## Cockpit Single Sign On Demo
 
 Cockpit can easily be linked to from other web applications (the web
 being what it is), or even be embedded into an iframe.  However, the
@@ -24,7 +23,7 @@ This repository contains a working sketch of how to set up the
 management system together with Cockpit to seamlessly transfer
 credentials to Cockpit.
 
-# Running the demo
+### Running the demo
 
 Find a place where you feel comfortable running this code as root,
 maybe a throw away virtual machine.  You need to have Cockpit
@@ -66,11 +65,11 @@ Then start with these steps:
  - switch to the new tab and watch the Cockpit UI for `MASTER` appear
    without having to log in again.
 
- - log out of Cockpit and it the "Log In Again" link to seamlessly log
+ - log out of Cockpit and it the "Login Again" link to seamlessly log
    in again.
 
 Here is a recording of what should happen: https://youtu.be/FSSiL_oHWi0
 
-# Detailed description
+### Detailed description
 
 coming up...
