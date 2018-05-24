@@ -106,7 +106,7 @@ def api_call(path, token):
                                   { "password": "not-tried", "token": "denied" })
             elif err.code == 404:
                 exit_with_problem("access-denied",
-                                  "Host with id %s is not known to Max Pane" % args[1],
+                                  "Host with id %s is not known" % args[1],
                                   None)
         raise
     return json.loads(resp)

@@ -34,7 +34,7 @@ DASHBOARD = """
       <button>Add</button>
     </form>
     <table>
-      <tr><th>Host</th></tr>
+      <tr><th>Hosts</th></tr>
       {host_rows}
     </table>
   </body>
@@ -83,9 +83,11 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
             return COCKPIT_URL.format(pane_host=pane_host,
                                       token=session.token,
                                       target_host=h["id"])
-        print(hosts)
-        host_rows = "\n".join([ DASHBOARD_HOST_ROW.format(link=cockpit_url(h), **h)
-                                for h in hosts ])
+        if len(hosts) > 0:
+            host_rows = "\n".join([ DASHBOARD_HOST_ROW.format(link=cockpit_url(h), **h)
+                                    for h in hosts ])
+        else:
+            host_rows = "<tr><td>(Database empty)</td></tr>"
         self.send_response(200)
         self.end_headers()
         self.wfile.write(DASHBOARD.format(host_rows=host_rows))
