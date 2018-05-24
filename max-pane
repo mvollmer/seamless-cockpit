@@ -13,15 +13,15 @@
 # In addition to serving the simplistic HTML pages that form the UI,
 # this program also responds to some restish API endpoints.  Such a
 # request should carry a "Authorization: token XXXX" header with a
-# valid token.  Valid tokens are given out by the UI via the links to
-# Cockpit and by the /refresh_token endpoint.
+# valid token.  Valid tokens are given out by the /token endpoint, see
+# below.
 #
 # - GET /api/host?id=ID
 #
 # Return the data for the host with the given id, as JSON.
 
 # This program also implements the OAuth implicit grant protocol on
-# the /get_token endpoint.
+# the /token endpoint.
 #
 # - GET /token?redirect_uri=URI
 #
