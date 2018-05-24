@@ -69,9 +69,7 @@ Then start with these steps:
  - log out of Cockpit and it the "Log In Again" link to seamlessly log
    in again.
 
-Here is a recording of what should happen:
-
-    XXX
+Here is a recording of what should happen: https://youtu.be/FSSiL_oHWi0
 
 # Detailed description
 
