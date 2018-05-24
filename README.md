@@ -30,17 +30,21 @@ Find a place where you feel comfortable running this code as root,
 maybe a throw away virtual machine.  You need to have Cockpit
 installed and Python.
 
+Below, MASTER is the DNS name or address of the machine where you run
+this code.  For example, you would type "https://MASTER:9090/" into a
+browser to access the regular Cockpit on that machine.
+
 You need to run two processes simultaneously, which is best done in
 two parallel terminals:
 
  1) ./max-pane
- 2) ./run-cockpit-ws
+ 2) ./max-pane-cockpit MASTER
 
 "max-pane" takes the place of the management system.  It serves a
 cruddy UI on port 8080.
 
-"run-cockpit-ws" runs a specially configured instance of Cockpit on
-port 9999.
+"max-pane-cockpit" runs a instance of Cockpit on port 9999 that has
+been specially configured to work with max-pane.
 
 Thus, be sure to open ports 8080 and 9999 if you want to access these
 services from outside of localhost.
@@ -48,7 +52,8 @@ services from outside of localhost.
 Then start with these steps:
 
  - browse to `http://MASTER:8080`, where `MASTER` is the address of
-   the machine that runs max-pane.
+   the machine that runs max-pane.  This brings up the login screen of
+   max-pane.
 
  - log in with root / hunter2
 

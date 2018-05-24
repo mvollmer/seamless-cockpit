@@ -1,0 +1,32 @@
+#! /bin/sh
+
+if [ $# -ne 1 ]; then
+    echo >&2 "usage: $0 <address of master>"
+    exit 1
+fi
+
+master=$1
+
+export XDG_CONFIG_DIRS=$(dirname $0)
+
+mkdir -p cockpit
+cat >cockpit/cockpit.conf <<EOF
+[Webservice]
+LoginTitle = Max Pane Cockpit
+
+[Bearer]
+Action = remote-login-ssh
+
+[SSH-Login]
+command = ./cockpit-auth-max-pane
+
+[OAuth]
+Url = http://${master}:8080/api/refresh-token
+EOF
+
+if [ ! -d ./cockpit/ws-certs.d ]; then
+    mkdir ./cockpit/ws-certs.d
+    remotectl certificate --ensure
+fi
+
+/usr/libexec/cockpit-ws --port 9999

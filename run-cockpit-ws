@@ -1,4 +1,0 @@
-#! /bin/sh
-
-export XDG_CONFIG_DIRS=$(dirname $0)
-/usr/libexec/cockpit-ws --port 9999
