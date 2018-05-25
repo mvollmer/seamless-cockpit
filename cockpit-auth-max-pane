@@ -145,6 +145,7 @@ def api_call(path, token):
                                   "Host with id %s is not known" % args[1],
                                   None)
         raise
+    dbg("<= %s" % resp)
     return json.loads(resp)
 
 # Main
