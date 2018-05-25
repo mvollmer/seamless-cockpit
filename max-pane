@@ -27,12 +27,8 @@
 #
 # Respond with a redirect response (code 301) to
 # "URI?access_token=XXXX", where XXXX is a valid token for use with
-# the API.
-#
-# If the request has a valid session cookie, the redirection will
-# happen right away.  Otherwise, the normal Max Pane login page will
-# be shown and the redirection happens after the use has logged in
-# there.
+# the API.  The request needs to have a valid session cookie, and
+# redirection is optionally only allowed to a given address.
 
 import os
 import sys
@@ -82,8 +78,10 @@ DASHBOARD_HOST_ROW = """
 """
 
 COCKPIT_URL = """
-https://{pane_host}:9999/={target_host}
+/web-console/={target_host}
 """
+
+redirect_netloc = None
 
 hosts = [ ]
 
@@ -112,11 +110,8 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         self.wfile.write(LOGIN.format(redirect_uri=redirect_uri))
 
     def dashboard_page(self, session):
-        pane_host=self.headers["Host"].split(":")[0]
         def cockpit_url(h):
-            return COCKPIT_URL.format(pane_host=pane_host,
-                                      token=session.token,
-                                      target_host=h["id"])
+            return COCKPIT_URL.format(target_host=h["id"])
         if len(hosts) > 0:
             host_rows = "\n".join([ DASHBOARD_HOST_ROW.format(link=cockpit_url(h), **h)
                                     for h in hosts ])
@@ -132,18 +127,7 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
         if params.get("user")[0] == USER and params.get("pass")[0] == PASS:
             s = Session()
             sessions[s.token] = s
-            redirect_uri = params.get("redirect_uri", [""])[0]
-            if redirect_uri != "":
-                # We come here when a request to /token was made
-                # without a session, see oauth_token.
-                rd = urlparse.urlparse(redirect_uri)
-                rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % s.token, rd[5])
-                self.send_response(301)
-                self.send_header("Location", urlparse.urlunparse(rd))
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-            else:
-                self.redirect("token=%s" % s.token)
+            self.redirect("token=%s" % s.token)
         else:
             self.send_error(401)
 
@@ -183,18 +167,20 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
     # OAuth
 
     def oauth_token(self, session, query):
+        global redirect_netloc
         if query["redirect_uri"]:
             rd = urlparse.urlparse(query["redirect_uri"][0])
-            if session:
-                rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
+            if redirect_netloc and not rd.netloc == redirect_netloc:
+                self.send_error(403)
+            else:
+                if session:
+                    rd = (rd[0], rd[1], rd[2], rd[3], "access_token=%s" % session.token, rd[5])
+                else:
+                    rd = (rd[0], rd[1], rd[2], rd[3], "error_description=No Max Pane session", rd[5])
                 self.send_response(301)
                 self.send_header("Location", urlparse.urlunparse(rd))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
-            else:
-                # Let the user login again, and redirect as requested
-                # when he/she does.  See do_login.
-                self.login_page(urlparse.urlunparse(rd))
         else:
             self.send_error(400)
 
@@ -238,9 +224,7 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
 
 # Main
 
-port = 8080
 if len(sys.argv) > 1:
-    port = int(sys.argv[2])
+    redirect_netloc = sys.argv[1]
 
-print("Listening on port {port}".format(port=port))
-BaseHTTPServer.HTTPServer(('', port), handler).serve_forever()
+BaseHTTPServer.HTTPServer(('127.0.0.1', 8888), handler).serve_forever()

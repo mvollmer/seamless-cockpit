@@ -26,33 +26,32 @@ credentials to Cockpit.
 ### Running the demo
 
 Find a place where you feel comfortable running this code as root,
-maybe a throw away virtual machine.  You need to have Cockpit
-installed and Python.
+maybe a throw away virtual machine.  You need to have Cockpit, Python,
+nginx, and sscg installed.
 
-Below, MASTER is the DNS name or address of the machine where you run
-this code.  For example, you would type "https://MASTER:9090/" into a
-browser to access the regular Cockpit on that machine.
-
-You need to run two processes simultaneously, which is best done in
-two parallel terminals:
+You need to run three processes simultaneously, which is best done in
+three parallel terminals:
 
  1) ./max-pane
- 2) ./max-pane-cockpit MASTER
+ 2) ./max-pane-cockpit
+ 3) ./max-pane-nginx
 
 "max-pane" takes the place of the management system.  It serves a
-cruddy UI on port 8080.
+cruddy UI, offers a minimalistic API, and does a little OAuth.
 
-"max-pane-cockpit" runs a instance of Cockpit on port 9999 that has
-been specially configured to work with max-pane.
+"max-pane-cockpit" runs a instance of Cockpit that has been specially
+configured to work with max-pane.
 
-Thus, be sure to open ports 8080 and 9999 if you want to access these
-services from outside of localhost.
+"max-pane-nginx" ties the two together and serves them on port 8080.
+
+Thus, be sure to open port 8080 if you want to access these services
+from outside of localhost.
 
 Then start with these steps:
 
- - browse to `http://MASTER:8080`, where `MASTER` is the address of
-   the machine that runs max-pane.  This brings up the login screen of
-   max-pane.
+ - browse to `https://MASTER:8080`, where `MASTER` is the address of
+   the machine that runs max-pane-nginx.  This brings up the login
+   screen of max-pane.
 
  - log in with root / hunter2
 
@@ -99,14 +98,14 @@ authentication, instead of the normal user and password prompts.
 
 When OAuth is used, Cockpit initiates a "implicit grant" scheme with
 the max-pane server to get a access token.  This token is passed to
-`cockpit-auth-mock-pane`.
+`cockpit-auth-max-pane`.
 
-The job of `cockpit-auth-mock-pane` is now to verify that the token is
+The job of `cockpit-auth-max-pane` is now to verify that the token is
 valid, and if it is, spawn Cockpit's own `cockpit-ssh` with the right
 parameters and credentials.
 
-It does this job by making a API call to the `mock-pane` server on
-localhost.  If `mock-pane` accepts the token, it will return the
+It does this job by making a API call to the `max-pane` server on
+localhost.  If `max-pane` accepts the token, it will return the
 credentials for use with `cockpit-ssh`.
 
 #### Host parameter
@@ -117,10 +116,23 @@ actual hostname or IP address that you would also use on the
 commandline with "ssh".  With our `cockpit-auth-max-pane` here it is
 simply the index into the array of hosts.
 
+#### Reverse proxying
+
+This demo uses a reverse proxy in front of the management system and
+Cockpit so that both can be served on the same port, with the same TLS
+certificate, and without third-party cookies.
+
+Accordingly, Cockpit doesn't use TLS at all and both Cockpit and
+max-pane only listen on localhost.
+
+Nginx redirect requests to `/web-console/...` to Cockpit and Cockpit
+has been configured to expect the `/web-console/` prefix.
+
 #### Linking
 
-Thus, when all this is configured by `mock-pane-cockpit`, all
-`mock-pane` needs to do is to use this simple URL for linking to
-Cockpit:
+Thus, when taking all this togeher, all `max-pane` needs to do is to
+use this simple relative URL for linking to Cockpit:
 
-    https://MASTER:9999/=INDEX
+    /web-console/=INDEX
+
+This can be a regular link, or the source for an iframe.

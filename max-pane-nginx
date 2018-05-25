@@ -1,0 +1,8 @@
+#! /bin/sh
+
+if [ ! -d certs ]; then
+    mkdir certs
+    (cd certs && sscg --lifetime 3650 --key-strength 2048 --hostname $(hostname))
+fi
+
+nginx -c $PWD/nginx.conf -g "daemon off;"

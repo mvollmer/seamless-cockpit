@@ -130,7 +130,7 @@ def get_token_from_auth_data(auth_data):
 
 def api_call(path, token):
     dbg("=> %s" % path)
-    req = urllib2.Request("http://localhost:8080/api/" + path, None,
+    req = urllib2.Request("http://localhost:8888/api/" + path, None,
                           { "Authorization": "token %s" % token })
     try:
         resp = urllib2.urlopen(req).read()
@@ -141,9 +141,7 @@ def api_call(path, token):
                                   "Token was not valid",
                                   { "password": "not-tried", "token": "denied" })
             elif err.code == 404:
-                exit_with_problem("access-denied",
-                                  "Host with id %s is not known" % args[1],
-                                  None)
+                exit_with_problem("access-denied", "Host is not known", None)
         raise
     dbg("<= %s" % resp)
     return json.loads(resp)
