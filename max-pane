@@ -141,6 +141,7 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.send_response(301)
                 self.send_header("Location", urlparse.urlunparse(rd))
                 self.send_header("Cache-Control", "no-store")
+                self.end_headers()
             else:
                 self.redirect("token=%s" % s.token)
         else:
@@ -189,6 +190,7 @@ class handler(BaseHTTPServer.BaseHTTPRequestHandler):
                 self.send_response(301)
                 self.send_header("Location", urlparse.urlunparse(rd))
                 self.send_header("Cache-Control", "no-store")
+                self.end_headers()
             else:
                 # Let the user login again, and redirect as requested
                 # when he/she does.  See do_login.
